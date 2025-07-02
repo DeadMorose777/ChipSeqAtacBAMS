@@ -1,0 +1,5 @@
+model_name: "uibcdf/DNABERT-6-117M-hg38"
+lr: 2e-5
+batch: 16
+epochs: 3
+freeze_backbone: true

@@ -1,0 +1,7 @@
+seq_length: 500
+n_filters: 128
+kernel: 13
+pool: 4
+hidden: 256
+lr: 0.001
+epochs: 10
