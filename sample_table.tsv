@@ -1,21 +1,20 @@
-sample_id	assay	bam_path	control_bam
-EXP057893	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS063468.bam	
-EXP057894	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS063469.bam	
-EXP057895	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS063470.bam	
-EXP057896	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS063471.bam	
-EXP057897	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS063472.bam	
-EXP057898	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS063473.bam	
-EXP075244	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS081234.bam	
-EXP075245	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS081235.bam	
-EXP075246	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS081236.bam	
-EXP075247	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS081237.bam	
-EXP075248	ChIP	/mnt/d/ChipSeqAtacBAMS/ALIGNS081238.bam	
-AEXP001289	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001289.bam	
-AEXP001290	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001290.bam	
-AEXP001291	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001291.bam	
-AEXP001292	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001292.bam	
-AEXP001293	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001293.bam	
-AEXP001294	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001294.bam	
-AEXP001295	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001295.bam	
-AEXP001296	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001296.bam	
-AEXP001297	ATAC	/mnt/d/ChipSeqAtacBAMS/AALIGNS001297.bam	
+sample_id	assay	species	treatment	cell_id	bam_path	control_bam	atac_sample_id
+EXP057893	ChIP	Homo sapiens	Passage: ten-thirty; Genotype: EGFP transfection	937	/mnt/d/ChipSeqAtacBAMS/ALIGNS063468.bam	/mnt/d/ChipSeqAtacBAMS/EXP057887.bam	AEXP001289
+EXP075244	ChIP	Homo sapiens	Treatment: treated with DMSO for 4 hrs; Compound: Dimethylsulfoxid (DMSO); Time point: 4 hrs; Passage: 10-30	6109	/mnt/d/ChipSeqAtacBAMS/ALIGNS081234.bam	/mnt/d/ChipSeqAtacBAMS/EXP075241.bam	AEXP017922
+EXP103402	ChIP	Homo sapiens	Treatment: treated with DMSO for 24 hours; Compound: DMSO; Time point: 24 hrs	2219	/mnt/d/ChipSeqAtacBAMS/ALIGNS109392.bam	/mnt/d/ChipSeqAtacBAMS/EXP103394.bam	AEXP040039
+EXP106479	ChIP	Homo sapiens		5285	/mnt/d/ChipSeqAtacBAMS/ALIGNS112469.bam		AEXP043946
+EXP106481	ChIP	Homo sapiens		390	/mnt/d/ChipSeqAtacBAMS/ALIGNS112471.bam		AEXP043948
+EXP106482	ChIP	Homo sapiens		9085	/mnt/d/ChipSeqAtacBAMS/ALIGNS112472.bam		AEXP043951
+EXP106483	ChIP	Homo sapiens		7668	/mnt/d/ChipSeqAtacBAMS/ALIGNS112473.bam		AEXP043953
+AEXP001289	ATAC	Homo sapiens	Treatment: EGFP	937	/mnt/d/ChipSeqAtacBAMS/AALIGNS001289.bam		
+AEXP017922	ATAC	Homo sapiens	Treatment: treated with DMSO for 24 hrs; GTRD_Rep_Group: 1; Compound: Dimethylsulfoxid (DMSO); Time point: 24 hrs; Passage: 10-30	6109	/mnt/d/ChipSeqAtacBAMS/AALIGNS017921.bam		
+AEXP040039	ATAC	Homo sapiens	Treatment: treated with DMSO for 24 hours; Compound: DMSO; Time point: 24 hrs; GTRD_Rep_Group: 1	2219	/mnt/d/ChipSeqAtacBAMS/AALIGNS040037.bam		
+AEXP043945	ATAC	Homo sapiens		2704	/mnt/d/ChipSeqAtacBAMS/AALIGNS043943.bam		
+AEXP043946	ATAC	Homo sapiens		5285	/mnt/d/ChipSeqAtacBAMS/AALIGNS043944.bam		
+AEXP043947	ATAC	Homo sapiens		7670	/mnt/d/ChipSeqAtacBAMS/AALIGNS043945.bam		
+AEXP043948	ATAC	Homo sapiens		390	/mnt/d/ChipSeqAtacBAMS/AALIGNS043946.bam		
+AEXP043949	ATAC	Homo sapiens		2690	/mnt/d/ChipSeqAtacBAMS/AALIGNS043947.bam		
+AEXP043950	ATAC	Homo sapiens		4660	/mnt/d/ChipSeqAtacBAMS/AALIGNS043948.bam		
+AEXP043951	ATAC	Homo sapiens		9085	/mnt/d/ChipSeqAtacBAMS/AALIGNS043949.bam		
+AEXP043952	ATAC	Homo sapiens		393	/mnt/d/ChipSeqAtacBAMS/AALIGNS043950.bam		
+AEXP043953	ATAC	Homo sapiens		7668	/mnt/d/ChipSeqAtacBAMS/AALIGNS043951.bam		
