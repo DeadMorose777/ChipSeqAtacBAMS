@@ -1,34 +1,59 @@
 #!/usr/bin/env python3
 """
-Читает MYC_info.xlsx  →  sample_table.tsv
-Оставляет по одной записи на cell_id.
-Содержит только:
-    cell_id, chip_bw, atac_bw
+DEBUG-версия генератора sample_table.tsv
+ничего не меняет на диске, просто пошагово объясняет,
+почему cell-линию берём / отбрасываем
 """
-import pandas as pd, pathlib, sys
+import pathlib, pandas as pd, os, shutil, textwrap
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 xls  = ROOT / "MYC_info.xlsx"
-out  = ROOT / "sample_table.tsv"
+bwdir = ROOT / "bw"
 
 dfc = pd.read_excel(xls, sheet_name="chipseq_info_MYC")
 dfa = pd.read_excel(xls, sheet_name="atac_info_MYC")
 
-# оставляем по одной строке на cell_id
-dfc = dfc.drop_duplicates("cell_id", keep="first")
-dfa = dfa.drop_duplicates("cell_id", keep="first")
+def have(p: pathlib.Path) -> bool:
+    return p.exists() and p.stat().st_size > 0
 
-tbl = dfc.merge(dfa[["cell_id","id"]], on="cell_id", how="left",
-                suffixes=("_chip","_atac"))
+kept, skipped = [], []
 
-records = []
-for r in tbl.itertuples():
-    sid      = r.id_chip      # EXP....
-    aid      = r.id_atac      # AEXP....
-    chip_bw  = ROOT / f"bw/{sid}_FE.bw"
-    atac_bw  = ROOT / f"bw/{aid}_ATAC.bw" if pd.notna(aid) else None
-    records.append((r.cell_id, chip_bw, atac_bw))
+for cid, chip_grp in dfc.groupby("cell_id"):
+    atac_grp = dfa[dfa.cell_id == cid]
 
-pd.DataFrame(records, columns=["cell_id","chip_bw","atac_bw"])\
-  .to_csv(out, sep="\t", index=False)
-print(f"✓ sample_table.tsv переписан ({len(records)} строк)")
+    # ---------- ищем ChIP-BW ----------
+    chip_bw = None
+    for _, rec in chip_grp.iterrows():
+        cand = bwdir / f"{rec.id}_FE.bw"
+        if have(cand):
+            chip_bw = cand; why_chip = f"нашёл {cand.name}"
+            break
+    else:
+        why_chip = "ни одного *_FE.bw нет"
+    
+    # ---------- ищем ATAC-BW ----------
+    atac_bw = None
+    for _, rec in atac_grp.iterrows():
+        cand = bwdir / f"{rec.id}_ATAC.bw"
+        if have(cand):
+            atac_bw = cand; why_atac = f"нашёл {cand.name}"
+            break
+    else:
+        why_atac = "ни одного *_ATAC.bw нет"
+
+    if chip_bw and atac_bw:
+        kept.append((cid, chip_bw.name, atac_bw.name))
+        status = "✓ KEEP"
+    else:
+        skipped.append(cid)
+        status = "✗ SKIP"
+
+    print(f"[{status}] cell_id={cid:<6}  "
+          f"ChIP: {why_chip:<25} | ATAC: {why_atac}")
+
+print("\nИТОГО:")
+print("  оставлено :", len(kept))
+print("  пропущено :", len(skipped))
+print("  файлов BW :", len(list(bwdir.glob('*.bw'))))
+print("\nСписок сохранённых пар:")
+print(textwrap.indent("\n".join(f"{cid}\t{c}\t{a}" for cid,c,a in kept),"  "))
