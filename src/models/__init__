@@ -1,0 +1,18 @@
+"""
+Сборник моделей.
+
+Импорт здесь держим **только классы** (без тяжёлых загрузок весов),
+чтобы импорт пакета был лёгким и не тянул за собой HuggingFace сразу.
+"""
+
+from .base_model import BaseModel
+from .cnn_model import CNNModel
+from .transformer_model import TransformerModel
+from .logreg_model import LogRegModel
+
+__all__ = [
+    "BaseModel",
+    "CNNModel",
+    "TransformerModel",
+    "LogRegModel",
+]

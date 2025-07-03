@@ -1,0 +1,16 @@
+"""
+src package ― короткие алиасы к часто-используемым объектам.
+Импортировать **здесь** ничего не обязательно, но удобно.
+"""
+
+from .training import fit
+from .registry import get_model_cls
+from .dataset import build_loaders
+from .metrics import MetricCollection
+
+__all__ = [
+    "fit",
+    "get_model_cls",
+    "build_loaders",
+    "MetricCollection",
+]

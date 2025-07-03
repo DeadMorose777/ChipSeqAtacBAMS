@@ -1,0 +1,11 @@
+torch>=2.3
+torchvision>=0.18
+tqdm
+PyYAML
+transformers>=4.42
+scikit-learn
+numpy
+pandas
+pyBigWig
+pyfaidx
+torchmetrics

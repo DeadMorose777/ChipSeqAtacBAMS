@@ -1,0 +1,20 @@
+# глобальные настройки запуска
+random_seed: 42
+dataset:
+  path: data/dataset.jsonl
+  train_frac: 0.7
+  val_frac: 0.15      # test = rest
+  stratify_by: label  # можно cell_id, chrom…
+loader:
+  batch_size: 64
+  num_workers: 4
+optim:
+  name: AdamW
+  lr: 3e-4
+  weight_decay: 1e-2
+trainer:
+  epochs: 10
+model_cfg: configs/cnn.yaml    # какую модель тренировать
+metrics: [auroc, auprc, f1, acc]
+device: cuda                   # cpu / cuda / cuda:0 …
+save_dir: runs/cnn_run1
