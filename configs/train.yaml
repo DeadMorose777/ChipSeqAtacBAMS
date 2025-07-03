@@ -2,6 +2,8 @@
 random_seed: 42
 dataset:
   path: data/dataset.jsonl
+  fasta: hg38.fa      # <-- путь к референсу
+  window: 500         # длина считываемого окна
   train_frac: 0.7
   val_frac: 0.15      # test = rest
   stratify_by: label  # можно cell_id, chrom…

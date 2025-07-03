@@ -22,8 +22,9 @@ def fit(cfg_path: str):
 
     # ---------- оптимизатор ----------
     optim_cls = getattr(torch.optim, cfg["optim"]["name"])
-    optim = optim_cls(model.parameters(), lr=cfg["optim"]["lr"],
-                      weight_decay=cfg["optim"]["weight_decay"])
+    lr = float(cfg["optim"]["lr"])
+    wd = float(cfg["optim"]["weight_decay"])
+    optim = optim_cls(model.parameters(), lr=lr, weight_decay=wd)
 
     best_val = 0.0
     for epoch in range(1, cfg["trainer"]["epochs"] + 1):
