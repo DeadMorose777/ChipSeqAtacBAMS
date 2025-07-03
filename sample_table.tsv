@@ -1,20 +1,8 @@
-sample_id	assay	species	treatment	cell_id	bam_path	control_bam	atac_sample_id
-EXP057893	ChIP	Homo sapiens	Passage: ten-thirty; Genotype: EGFP transfection	937	/mnt/d/ChipSeqAtacBAMS/ALIGNS063468.bam	/mnt/d/ChipSeqAtacBAMS/EXP057887.bam	AEXP001289
-EXP075244	ChIP	Homo sapiens	Treatment: treated with DMSO for 4 hrs; Compound: Dimethylsulfoxid (DMSO); Time point: 4 hrs; Passage: 10-30	6109	/mnt/d/ChipSeqAtacBAMS/ALIGNS081234.bam	/mnt/d/ChipSeqAtacBAMS/EXP075241.bam	AEXP017922
-EXP103402	ChIP	Homo sapiens	Treatment: treated with DMSO for 24 hours; Compound: DMSO; Time point: 24 hrs	2219	/mnt/d/ChipSeqAtacBAMS/ALIGNS109392.bam	/mnt/d/ChipSeqAtacBAMS/EXP103394.bam	AEXP040039
-EXP106479	ChIP	Homo sapiens		5285	/mnt/d/ChipSeqAtacBAMS/ALIGNS112469.bam		AEXP043946
-EXP106481	ChIP	Homo sapiens		390	/mnt/d/ChipSeqAtacBAMS/ALIGNS112471.bam		AEXP043948
-EXP106482	ChIP	Homo sapiens		9085	/mnt/d/ChipSeqAtacBAMS/ALIGNS112472.bam		AEXP043951
-EXP106483	ChIP	Homo sapiens		7668	/mnt/d/ChipSeqAtacBAMS/ALIGNS112473.bam		AEXP043953
-AEXP001289	ATAC	Homo sapiens	Treatment: EGFP	937	/mnt/d/ChipSeqAtacBAMS/AALIGNS001289.bam		
-AEXP017922	ATAC	Homo sapiens	Treatment: treated with DMSO for 24 hrs; GTRD_Rep_Group: 1; Compound: Dimethylsulfoxid (DMSO); Time point: 24 hrs; Passage: 10-30	6109	/mnt/d/ChipSeqAtacBAMS/AALIGNS017921.bam		
-AEXP040039	ATAC	Homo sapiens	Treatment: treated with DMSO for 24 hours; Compound: DMSO; Time point: 24 hrs; GTRD_Rep_Group: 1	2219	/mnt/d/ChipSeqAtacBAMS/AALIGNS040037.bam		
-AEXP043945	ATAC	Homo sapiens		2704	/mnt/d/ChipSeqAtacBAMS/AALIGNS043943.bam		
-AEXP043946	ATAC	Homo sapiens		5285	/mnt/d/ChipSeqAtacBAMS/AALIGNS043944.bam		
-AEXP043947	ATAC	Homo sapiens		7670	/mnt/d/ChipSeqAtacBAMS/AALIGNS043945.bam		
-AEXP043948	ATAC	Homo sapiens		390	/mnt/d/ChipSeqAtacBAMS/AALIGNS043946.bam		
-AEXP043949	ATAC	Homo sapiens		2690	/mnt/d/ChipSeqAtacBAMS/AALIGNS043947.bam		
-AEXP043950	ATAC	Homo sapiens		4660	/mnt/d/ChipSeqAtacBAMS/AALIGNS043948.bam		
-AEXP043951	ATAC	Homo sapiens		9085	/mnt/d/ChipSeqAtacBAMS/AALIGNS043949.bam		
-AEXP043952	ATAC	Homo sapiens		393	/mnt/d/ChipSeqAtacBAMS/AALIGNS043950.bam		
-AEXP043953	ATAC	Homo sapiens		7668	/mnt/d/ChipSeqAtacBAMS/AALIGNS043951.bam		
+cell_id	chip_bw	atac_bw
+937	/mnt/d/ChipSeqAtacBAMS/bw/EXP057893_FE.bw	/mnt/d/ChipSeqAtacBAMS/bw/AEXP001289_ATAC.bw
+6109	/mnt/d/ChipSeqAtacBAMS/bw/EXP075244_FE.bw	/mnt/d/ChipSeqAtacBAMS/bw/AEXP017922_ATAC.bw
+2219	/mnt/d/ChipSeqAtacBAMS/bw/EXP103402_FE.bw	/mnt/d/ChipSeqAtacBAMS/bw/AEXP040039_ATAC.bw
+5285	/mnt/d/ChipSeqAtacBAMS/bw/EXP106479_FE.bw	/mnt/d/ChipSeqAtacBAMS/bw/AEXP043946_ATAC.bw
+390	/mnt/d/ChipSeqAtacBAMS/bw/EXP106481_FE.bw	/mnt/d/ChipSeqAtacBAMS/bw/AEXP043948_ATAC.bw
+9085	/mnt/d/ChipSeqAtacBAMS/bw/EXP106482_FE.bw	/mnt/d/ChipSeqAtacBAMS/bw/AEXP043951_ATAC.bw
+7668	/mnt/d/ChipSeqAtacBAMS/bw/EXP106483_FE.bw	/mnt/d/ChipSeqAtacBAMS/bw/AEXP043953_ATAC.bw

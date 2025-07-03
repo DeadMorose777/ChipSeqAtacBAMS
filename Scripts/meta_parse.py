@@ -1,58 +1,34 @@
 #!/usr/bin/env python3
 """
-Собирает sample_table.tsv   (ChIP + ATAC)
-* первичный ключ – cell_id  (cell_type)  
-* если в каком-то листе >1 записи на cell_id, берётся первая
-* для каждой ChIP-строки подставляется atac_sample_id – первый ATAC
-  с тем же cell_id; если его нет – пишем NA
+Читает MYC_info.xlsx  →  sample_table.tsv
+Оставляет по одной записи на cell_id.
+Содержит только:
+    cell_id, chip_bw, atac_bw
 """
-import pandas as pd
-import pathlib, sys, os
+import pandas as pd, pathlib, sys
 
-ROOT   = pathlib.Path(__file__).resolve().parents[1]          # /mnt/d/ChipSeqAtacBAMS
-XLSX   = ROOT / "MYC_info.xlsx"
-OUT    = ROOT / "sample_table.tsv"
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+xls  = ROOT / "MYC_info.xlsx"
+out  = ROOT / "sample_table.tsv"
 
-chip = pd.read_excel(XLSX, sheet_name="chipseq_info_MYC")
-atac = pd.read_excel(XLSX, sheet_name="atac_info_MYC")
+dfc = pd.read_excel(xls, sheet_name="chipseq_info_MYC")
+dfa = pd.read_excel(xls, sheet_name="atac_info_MYC")
 
-# оставляем по одной записи на каждый cell_id (первая встреченная)
-chip = chip.drop_duplicates(subset="cell_id", keep="first").copy()
-atac = atac.drop_duplicates(subset="cell_id", keep="first").copy()
+# оставляем по одной строке на cell_id
+dfc = dfc.drop_duplicates("cell_id", keep="first")
+dfa = dfa.drop_duplicates("cell_id", keep="first")
 
-# словарь: cell_id → ATAC-sample_id
-cell2atac = dict(zip(atac["cell_id"], atac["id"]))
+tbl = dfc.merge(dfa[["cell_id","id"]], on="cell_id", how="left",
+                suffixes=("_chip","_atac"))
 
 records = []
+for r in tbl.itertuples():
+    sid      = r.id_chip      # EXP....
+    aid      = r.id_atac      # AEXP....
+    chip_bw  = ROOT / f"bw/{sid}_FE.bw"
+    atac_bw  = ROOT / f"bw/{aid}_ATAC.bw" if pd.notna(aid) else None
+    records.append((r.cell_id, chip_bw, atac_bw))
 
-for _, row in chip.iterrows():
-    cid  = row["cell_id"]
-    atac_id = cell2atac.get(cid, pd.NA)
-
-    records.append({
-        "sample_id"      : row["id"],
-        "assay"          : "ChIP",
-        "species"        : row["species"],
-        "treatment"      : row["treatment"],
-        "cell_id"        : cid,
-        "bam_path"       : str(ROOT / f"{row['align_id']}.bam"),
-        "control_bam"    : str(ROOT / f"{row['control_id']}.bam") if pd.notna(row["control_id"]) else pd.NA,
-        "atac_sample_id" : atac_id
-    })
-
-for _, row in atac.iterrows():
-    records.append({
-        "sample_id"      : row["id"],
-        "assay"          : "ATAC",
-        "species"        : row["species"],
-        "treatment"      : row["treatment"],
-        "cell_id"        : row["cell_id"],
-        "bam_path"       : str(ROOT / f"{row['align_id']}.bam"),
-        "control_bam"    : pd.NA,
-        "atac_sample_id" : pd.NA
-    })
-
-tbl = pd.DataFrame.from_records(records)
-tbl.to_csv(OUT, sep="\t", index=False)
-
-print(f"✓ sample_table.tsv переписан: {OUT}  (строк: {len(tbl)})")
+pd.DataFrame(records, columns=["cell_id","chip_bw","atac_bw"])\
+  .to_csv(out, sep="\t", index=False)
+print(f"✓ sample_table.tsv переписан ({len(records)} строк)")

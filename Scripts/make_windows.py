@@ -1,64 +1,110 @@
 #!/usr/bin/env python3
 """
-Создаёт dataset.jsonl со скользящими окнами.
-Использует sample_table.tsv, колонку atac_sample_id.
-Если bigWig ATAC для данного ChIP не найден, окно пропускается,
-но скрипт продолжает работу.
+Берём sample_table.tsv → формируем dataset.jsonl.
+
+ • окно WIN (по умолчанию 200 bp) скользит по узким пикам ChIP-seq
+ • для каждого окна пишем JSON-строку
+       {"cell_id":…, "seq":…, "atac":…, "chip":…}
+
+   – seq   : 200-bp-последовательность из hg38
+   – atac  : mean-coverage по ATAC-BW
+   – chip  : mean Fold-Enrichment по ChIP-BW  (целевая переменная)
+
+ Все строки пишутся в gzip-архив `dataset.jsonl`.
+ Файл пропускается, если не удалось открыть соответствующий bw
+ или окно выходит за границы хромосомы.
 """
-import json, random, pathlib, os, multiprocessing as mp, pyBigWig, pyfaidx, sys, warnings
-import pandas as pd
+import os, json, gzip, warnings, pathlib
+import multiprocessing as mp
 
-ROOT   = pathlib.Path(__file__).resolve().parents[1]
-GENOME = os.environ.get("GENOME", str(ROOT / "hg38.fa"))
-FA     = pyfaidx.Fasta(GENOME)
-TAB    = pd.read_csv(ROOT / "sample_table.tsv", sep="\t")
+import pandas as pd, numpy as np, pyBigWig, pyfaidx
 
-WIN = 512           # длина ДНК-окна
-STEP= 256           # шаг
+WIN   = 200
+ROOT  = pathlib.Path(__file__).resolve().parents[1]
+GENOME= pathlib.Path(os.getenv("GENOME", ROOT / "hg38.fa"))
+TSV   = ROOT / "sample_table.tsv"
+OUT   = ROOT / "dataset.jsonl"
 
-# словарь ATAC-bw: sample_id → путь
-bw_atac = { r["sample_id"]: str(ROOT/f"bw/{r['sample_id']}_ATAC.bw")
-            for _,r in TAB.query("assay=='ATAC'").iterrows()
-            if os.path.exists(ROOT/f"bw/{r['sample_id']}_ATAC.bw") }
+# ------------------ входные файлы ------------------
+fa  = pyfaidx.Fasta(str(GENOME))
 
-peaks_dir = ROOT / "peaks"
-out_path  = ROOT / "dataset.jsonl"
+tbl = pd.read_csv(TSV, sep="\t")
+# пытаемся открыть BigWig-и; если файла нет – клетка отбрасывается
+bw_at, bw_ch = {}, {}
+keep_rows = []
 
-def one_sample(row):
-    cid   = row["cell_id"]
-    atac  = row["atac_sample_id"]
-    if pd.isna(atac) or atac not in bw_atac:
-        warnings.warn(f"⚠️  Нет подходящего ATAC для {row['sample_id']} (cell {cid})")
-        return []
+for r in tbl.itertuples():
+    ok = True
+    try:
+        bw_at[r.cell_id] = pyBigWig.open(r.atac_bw)
+    except Exception as e:
+        warnings.warn(f"🟥  нет ATAC-BW {r.atac_bw} ({e})")
+        ok = False
+    try:
+        bw_ch[r.cell_id] = pyBigWig.open(r.chip_bw)
+    except Exception as e:
+        warnings.warn(f"🟥  нет ChIP-BW {r.chip_bw} ({e})")
+        ok = False
+    if ok:
+        keep_rows.append(r)
 
-    bw     = pyBigWig.open(bw_atac[atac])
-    peaks  = pathlib.Path(peaks_dir/row["sample_id"]/f"{row['sample_id']}_summits.bed")
+if not keep_rows:
+    raise SystemExit("❌  Ни одной пары ATAC+ChIP BigWig не открылась")
+
+print(f"✓ к обработке {len(keep_rows)} клеток "
+      f"(из {len(tbl)}) – остальные отброшены")
+
+# ----------------- вспом-функции -------------------
+def peaks_path(chip_bw_path:str)->pathlib.Path:
+    samp = pathlib.Path(chip_bw_path).stem.replace("_FE","")
+    return ROOT / f"peaks/{samp}/{samp}_summits.bed"
+
+def one_sample(r):
+    cid   = r.cell_id
+    peaks = peaks_path(r.chip_bw)
+    res   = []
+
     if not peaks.exists():
-        warnings.warn(f"⚠️  Нет summits.bed для {row['sample_id']}")
-        return []
+        warnings.warn(f"⚠️  нет пиков {peaks}")
+        return res
 
-    windows = []
-    with peaks.open() as bed:
-        for ln in bed:
-            chrom, pos = ln.split()[:2]
-            center = int(pos)
-            start  = max(0, center - WIN//2)
-            seq    = str(FA[chrom][start:start+WIN]).upper()
-            atac_val = bw.stats(chrom, start, start+WIN, type="mean")[0] or 0
-            windows.append({
-                "id"    : f"{row['sample_id']}:{chrom}:{start}-{start+WIN}",
-                "seq"   : seq,
-                "atac"  : atac_val,
-                "label" : 1                       # положительное окно
+    atac = bw_at[cid]
+    chip = bw_ch[cid]
+
+    with peaks.open() as fh:
+        for ln in fh:
+            chrom, start, *_ = ln.split()[:3]
+            start  = int(start)
+            center = start + WIN // 2
+            left   = max(0, center - WIN // 2)
+            right  = left + WIN
+
+            # обрезаем окна, выходящие за конец хромосомы
+            chr_len = len(fa[chrom])
+            if right > chr_len:
+                continue
+
+            seq = fa[chrom][left:right].seq.upper()
+            if len(seq) != WIN or "N" in seq:
+                continue
+
+            atac_val = atac.stats(chrom, left, right, type="mean")[0] or 0
+            chip_val = chip.stats(chrom, left, right, type="mean")[0] or 0
+
+            res.append({
+                "cell_id": int(cid),
+                "seq"    : seq,
+                "atac"   : atac_val,
+                "chip"   : chip_val
             })
-    bw.close()
-    return windows
+    return res
 
-# собираем для всех ChIP
-chip_rows = TAB.query("assay=='ChIP'")
-with mp.Pool() as pool, open(out_path,"w") as out:
-    for wins in pool.imap_unordered(one_sample, chip_rows.to_dict("records")):
-        for w in wins:
-            out.write(json.dumps(w)+"\n")
+# --------------- параллельная выгрузка --------------
+with mp.Pool() as pool, gzip.open(OUT, "wt") as gz:
+    total = 0
+    for recs in pool.imap_unordered(one_sample, keep_rows):
+        for r in recs:
+            gz.write(json.dumps(r) + "\n")
+            total += 1
 
-print(f"✓ dataset.jsonl готов: {out_path}")
+print(f"✓ dataset.jsonl готов – {total} окон")
