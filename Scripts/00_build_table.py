@@ -10,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]          # /mnt/d/ChipSeqAtacBAMS
+SRC  = ROOT / "source_bam"                         # <- новая папка с BAM
 XLSX = ROOT / "MYC_info.xlsx"
 OUT  = ROOT / "sample_pairs.tsv"
 
@@ -20,7 +21,7 @@ pairs  = []
 def first_valid(df, kind):
     """вернуть первую строку, для которой существует BAM"""
     for _, r in df.iterrows():
-        bam = ROOT / f"{r.align_id}.bam"
+        bam = SRC / f"{r.align_id}.bam"
         if bam.exists():
             print(f"[✓ {kind}] {r.id:<11}  {bam.name}")
             return r, bam
