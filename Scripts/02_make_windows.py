@@ -5,12 +5,15 @@
 """
 
 import json, random, warnings
-from pathlib import Path
+from pathlib import Path, PurePath
 import pandas as pd
 import pyBigWig, pyfaidx
 
 ROOT = Path(__file__).resolve().parents[1]
 WIN  = 200                         # размер окна
+
+DATA_DIR = ROOT / "data"
+DATA_DIR.mkdir(exist_ok=True)
 
 pairs = pd.read_csv(ROOT / "sample_pairs.tsv", sep="\t")
 fa    = pyfaidx.Fasta(str(ROOT / "hg38.fa"))
@@ -26,7 +29,7 @@ def ok_interval(chrom: str, start: int, bw: pyBigWig.pyBigWig) -> bool:
     return 0 <= start and start + WIN < bw.chroms()[chrom]
 
 # ------------ работа --------------------------------------------------------
-dst = ROOT / "dataset.jsonl"
+dst = DATA_DIR / "dataset.jsonl"
 dst.write_text("")
 
 for _, row in pairs.iterrows():
@@ -93,4 +96,4 @@ for _, row in pairs.iterrows():
 chip_bw.close(); atac_bw.close()
 
 size_mb = dst.stat().st_size / 1e6
-print(f"\n⇢ dataset.jsonl готов — {size_mb:.1f} MB")
+print(f"\n⇢ {dst.relative_to(ROOT)} готов — {size_mb:.1f} MB")
