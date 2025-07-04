@@ -9,3 +9,5 @@ pandas
 pyBigWig
 pyfaidx
 torchmetrics
+matplotlib
+tensorboard
