@@ -21,27 +21,31 @@ def _open_bw(path):
     return _BW_CACHE[path]
 
 def make_transform(cfg):
-    win  = cfg["dataset"]["window"]
-    thr  = cfg["dataset"]["fe_thresh"]
+    win = cfg["dataset"]["window"]
+    thr = cfg["dataset"]["fe_thresh"]
 
     def _tr(rec):
         fa   = _open_fasta(rec["dna_fa"])
         atac = _open_bw(rec["atac_bw"])
         fe   = _open_bw(rec["fe_bw"])
 
-        s = int(rec["start"]); e = s + win
+        s = int(rec["start"]); e = s+win
         chrom = rec["chrom"]
 
-        seq   = fa[chrom][s:e].seq.upper()
-        atac_vec = np.nan_to_num(atac.values(chrom, s, e), nan=0.0).astype("float32")
-        fe_vec   = np.nan_to_num(fe.values(chrom, s, e), nan=0.0).astype("float32")
-        label = (fe_vec > thr).astype("float32")
+        # --- проверяем границы ещё раз ---
+        chrom_len = min(atac.chroms().get(chrom,0),
+                        fe.chroms().get(chrom,0))
+        if e > chrom_len or s < 0:
+            return None                     # будет отброшено DataLoader'ом
+
+        seq = fa[chrom][s:e].seq.upper()
+        atac_v = np.nan_to_num(atac.values(chrom,s,e), nan=0.0).astype("float32")
+        fe_v   = np.nan_to_num(fe.values  (chrom,s,e), nan=0.0).astype("float32")
+        label  = (fe_v > thr).astype("float32")
 
         return dict(seq=seq,
-                    atac=torch.from_numpy(atac_vec)[None, :],   # (1,L)
-                    label=torch.from_numpy(label),              # (L,)
-                    )
-
+                    atac=torch.from_numpy(atac_v)[None,:],
+                    label=torch.from_numpy(label))
     return _tr
 
 class JsonlDataset(Dataset):
@@ -49,7 +53,11 @@ class JsonlDataset(Dataset):
         self.recs = [json.loads(l) for l in open(path)]
         self.tr   = transform
     def __len__(self): return len(self.recs)
-    def __getitem__(self, i): return self.tr(self.recs[i])
+    def __getitem__(self,i):
+        out = self.tr(self.recs[i])
+        if out is None:                      # окно вышло за границы
+            return self.__getitem__((i+1)%len(self))
+        return out
 
 def split_dataset(ds, train_f, val_f, seed):
     n = len(ds); n_tr = int(n*train_f); n_val = int(n*val_f)
