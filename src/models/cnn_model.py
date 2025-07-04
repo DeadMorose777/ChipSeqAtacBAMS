@@ -1,32 +1,31 @@
-"""
-CNN из старого train_cnn.py :contentReference[oaicite:2]{index=2}, переписанный под общий интерфейс.
-"""
-
 import torch, torch.nn as nn
 from .base_model import BaseModel
-from ..layers import OneHotEncoder
+from ..layers.tokenizers import OneHotFixed
 
 class CNNModel(BaseModel):
-    def __init__(self, cfg: dict):
+    """5-канальный Conv-UNet-Lite: (DNA4+ATAC1) → logits(L)"""
+    def __init__(self, cfg):
         super().__init__()
-        self.enc = OneHotEncoder(pad_to=cfg["seq_length"])
-        self.conv = nn.Conv1d(4, cfg["n_filters"], cfg["kernel"])
-        self.pool = nn.MaxPool1d(cfg["pool"])
-        L = (cfg["seq_length"] - cfg["kernel"] + 1) // cfg["pool"]
-        self.fc1 = nn.Linear(cfg["n_filters"] * L + 1, cfg["hidden"])
-        self.fc2 = nn.Linear(cfg["hidden"], 1)
+        L = cfg["seq_length"]
+        self.enc = OneHotFixed()
+
+        C = 128
+        self.net = nn.Sequential(
+            nn.Conv1d(5,C,7,padding=3), nn.ReLU(),
+            nn.Conv1d(C,C,7,padding=3), nn.ReLU(),
+            nn.Conv1d(C,C,7,padding=3), nn.ReLU(),
+            nn.Conv1d(C,1,1)            # logits
+        )
 
     # ---------- API ----------
     def forward(self, batch):
-        x = batch["seq"]           # (B,4,L)
-        at = batch["atac"]         # (B,1)
-        x = self.pool(torch.relu(self.conv(x)))
-        x = torch.cat([x.flatten(1), at], 1)
-        x = torch.relu(self.fc1(x))
-        return torch.sigmoid(self.fc2(x)).squeeze(1)
+        x_dna  = batch["seq"]          # (B,4,L)
+        x_atac = batch["atac"]         # (B,1,L)
+        x = torch.cat([x_dna, x_atac],1)
+        return self.net(x).squeeze(1)  # (B,L) logits
 
     def collate_fn(self, samples):
-        seqs = torch.stack([self.enc(s["seq"]) for s in samples])
-        atac = torch.stack([s["atac"] for s in samples])
-        labels = torch.stack([s["label"] for s in samples])
-        return {"seq": seqs, "atac": atac, "label": labels}
+        dna = torch.stack([self.enc(s["seq"]) for s in samples])     # (B,4,L)
+        atac= torch.stack([s["atac"] for s in samples])              # (B,1,L)
+        lbl = torch.stack([s["label"] for s in samples])             # (B,L)
+        return {"seq":dna,"atac":atac,"label":lbl}

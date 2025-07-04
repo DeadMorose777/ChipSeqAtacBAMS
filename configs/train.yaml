@@ -1,22 +1,28 @@
-# глобальные настройки запуска
 random_seed: 42
+
 dataset:
-  path: data/dataset.jsonl
-  fasta: hg38.fa      # <-- путь к референсу
-  window: 500         # длина считываемого окна
+  path: data/dataset.jsonl    # будет создан обновлённым 02_make_windows.py
+  window: 1000                # длина контекста L
+  fasta:  hg38.fa
+  fe_thresh: 1.0              # > FE_thresh → «в пикe»
   train_frac: 0.7
-  val_frac: 0.15      # test = rest
-  stratify_by: label  # можно cell_id, chrom…
+  val_frac: 0.15
+  stratify_by: cell           # чтобы все клетки были во всех сплитах
+
 loader:
-  batch_size: 64
+  batch_size: 8               # смело увеличивайте: RTX 4090 тянет B~16-32
   num_workers: 4
+
 optim:
   name: AdamW
   lr: 3e-4
   weight_decay: 1e-2
+
 trainer:
   epochs: 10
-model_cfg: configs/cnn.yaml    # какую модель тренировать
-metrics: [auroc, auprc, f1, acc]
-device: cuda                   # cpu / cuda / cuda:0 …
+
+model_cfg: configs/cnn.yaml   # cnn или transformer.yaml
+metrics: [auprc, auroc, mcc, bacc]
+device: cuda
+
 save_dir: runs/cnn_run1

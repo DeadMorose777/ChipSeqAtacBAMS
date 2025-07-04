@@ -6,6 +6,15 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer
 
+class OneHotFixed:
+    """one-hot (4,L) без паддинга: длина приходит готовая"""
+    _map = {b"A":0,b"C":1,b"G":2,b"T":3}
+    def __call__(self, seq:str):
+        arr = np.zeros((4,len(seq)), np.float32)
+        for i,b in enumerate(seq.encode()):
+            if b in self._map: arr[self._map[b],i]=1
+        return torch.from_numpy(arr)
+
 class OneHotEncoder:
     _map = {b"A": 0, b"C": 1, b"G": 2, b"T": 3}
 

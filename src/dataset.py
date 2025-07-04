@@ -1,79 +1,67 @@
 """
-Генерация train/val/test DataLoader-ов с единым collate_fn.
-Если в jsonl нет поля "seq", последовательность берётся из fasta.
+Dataset: каждая запись -> (seq_str, atac_vector(L), label_mask(L))
+Кэшируем Fasta и BigWig, чтобы не открывать файл сотни раз.
 """
 
-import json, torch, pyfaidx
+import json, torch, numpy as np, pyfaidx, pyBigWig
 from pathlib import Path
 from torch.utils.data import Dataset, DataLoader, random_split
 
-# ---------- helpers ----------
-_FA_CACHE = {}                     # отдельный Fasta-объект на каждый worker
+_FASTA_CACHE  = {}
+_BW_CACHE     = {}
 
+def _open_fasta(path):
+    if path not in _FASTA_CACHE:
+        _FASTA_CACHE[path] = pyfaidx.Fasta(path)
+    return _FASTA_CACHE[path]
 
-def get_fasta(path: str | Path):
-    """Ленивая и потокобезопасная инициализация pyfaidx.Fasta."""
-    global _FA_CACHE
-    if path not in _FA_CACHE:
-        _FA_CACHE[path] = pyfaidx.Fasta(str(path))
-    return _FA_CACHE[path]
+def _open_bw(path):
+    if path not in _BW_CACHE:
+        _BW_CACHE[path] = pyBigWig.open(path)
+    return _BW_CACHE[path]
 
+def make_transform(cfg):
+    win  = cfg["dataset"]["window"]
+    thr  = cfg["dataset"]["fe_thresh"]
 
-def make_transform(cfg: dict):
-    fasta_path = Path(cfg["dataset"]["fasta"])
-    win        = int(cfg["dataset"]["window"])
+    def _tr(rec):
+        fa   = _open_fasta(rec["dna_fa"])
+        atac = _open_bw(rec["atac_bw"])
+        fe   = _open_bw(rec["fe_bw"])
 
-    def _transform(rec: dict) -> dict:
-        # --- последовательность ---
-        if "seq" in rec:                       # вдруг уже есть
-            seq = rec["seq"].upper()
-        else:
-            fa = get_fasta(fasta_path)
-            start = int(rec["start"])
-            end   = start + win
-            seq = fa[rec["chrom"]][start:end].seq.upper()
+        s = int(rec["start"]); e = s + win
+        chrom = rec["chrom"]
 
-        return {
-            "seq": seq,                                       # строка
-            "atac": torch.tensor([float(rec["atac"])], dtype=torch.float32),
-            "label": torch.tensor(float(rec["label"]), dtype=torch.float32),
-        }
+        seq   = fa[chrom][s:e].seq.upper()
+        atac_vec = np.nan_to_num(atac.values(chrom, s, e), nan=0.0).astype("float32")
+        fe_vec   = np.nan_to_num(fe.values(chrom, s, e), nan=0.0).astype("float32")
+        label = (fe_vec > thr).astype("float32")
 
-    return _transform
+        return dict(seq=seq,
+                    atac=torch.from_numpy(atac_vec)[None, :],   # (1,L)
+                    label=torch.from_numpy(label),              # (L,)
+                    )
 
+    return _tr
 
-# ---------- Dataset / DataLoaders ----------
 class JsonlDataset(Dataset):
-    def __init__(self, path: Path, transform):
+    def __init__(self, path: str, transform):
         self.recs = [json.loads(l) for l in open(path)]
-        self.transform = transform
-
+        self.tr   = transform
     def __len__(self): return len(self.recs)
-
-    def __getitem__(self, idx):
-        return self.transform(self.recs[idx])
-
+    def __getitem__(self, i): return self.tr(self.recs[i])
 
 def split_dataset(ds, train_f, val_f, seed):
-    n = len(ds)
-    n_train = int(n * train_f)
-    n_val   = int(n * val_f)
+    n = len(ds); n_tr = int(n*train_f); n_val = int(n*val_f)
     g = torch.Generator().manual_seed(seed)
-    return random_split(ds, [n_train, n_val, n - n_train - n_val], generator=g)
+    return random_split(ds, [n_tr, n_val, n-n_tr-n_val], generator=g)
 
-
-def build_loaders(cfg: dict, collate_fn):
-    transform = make_transform(cfg)
-    ds = JsonlDataset(Path(cfg["dataset"]["path"]), transform)
-
-    tr, va, te = split_dataset(
-        ds, cfg["dataset"]["train_frac"], cfg["dataset"]["val_frac"], cfg["random_seed"]
-    )
-
-    kwargs = dict(
-        batch_size=cfg["loader"]["batch_size"],
-        num_workers=cfg["loader"]["num_workers"],
-        collate_fn=collate_fn,
-        shuffle=True,
-    )
-    return DataLoader(tr, **kwargs), DataLoader(va, **kwargs), DataLoader(te, **kwargs)
+def build_loaders(cfg, collate_fn):
+    ds = JsonlDataset(cfg["dataset"]["path"], make_transform(cfg))
+    tr,va,te = split_dataset(ds, cfg["dataset"]["train_frac"],
+                                  cfg["dataset"]["val_frac"],
+                                  cfg["random_seed"])
+    kwargs = dict(batch_size=cfg["loader"]["batch_size"],
+                  num_workers=cfg["loader"]["num_workers"],
+                  collate_fn=collate_fn, shuffle=True)
+    return DataLoader(tr,**kwargs), DataLoader(va,**kwargs), DataLoader(te,**kwargs)
