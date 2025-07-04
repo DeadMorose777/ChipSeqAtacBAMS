@@ -11,3 +11,4 @@ pyfaidx
 torchmetrics
 matplotlib
 tensorboard
+intervaltree

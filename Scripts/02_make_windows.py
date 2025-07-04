@@ -1,95 +1,104 @@
 #!/usr/bin/env python
 """
 02_make_windows.py
-------------------
-Готовит dataset.jsonl для задачи сегментации пиков.
+==================
+Создаёт dataset.jsonl для задачи «посимвольная сегментация».
 
-• 1-й проход  — считаем, сколько окон получится (total)
-• 2-й проход  — пишем jsonl, продвигаем tqdm(total)
+• Positive окна — центры MACS3-summits (по одному на пик)
+• Negative окна — случайные позиции ≥BUFF bp от любого narrowPeak
+• Формат записи:
+    {chrom, start, window, cell, dna_fa, atac_bw, fe_bw}
 
-Окно фиксированной длины WIN вокруг центра каждого MACS-пика.
+Баланс 1:1 (NEG_RATIO можно поменять).
 """
 
-import json
+import json, random
 from pathlib import Path
+from collections import defaultdict
 
 import pandas as pd
 import pyBigWig
+from intervaltree import Interval, IntervalTree
 from tqdm import tqdm
 
-
-# ---------- константы ----------------------------------------------------- #
+# ---------- параметры ----------------------------------------------------- #
 ROOT    = Path(__file__).resolve().parents[1]
-WIN     = 1000             # длина окна, bp
-THRESH  = 1.0              # FE > THRESH ⇒ пиковая позиция
-PAIRS_TSV = ROOT / "sample_pairs.tsv"
+WIN     = 1000                # длина окна
+BUFF    = 5_000               # зона отчуждения от пика для негатива
+NEG_RATIO = 1                 # сколько отрицательных на 1 положительный
+PAIRS = pd.read_csv(ROOT / "sample_pairs.tsv", sep="\t")
 
-OUT_PATH = ROOT / "data" / "dataset.jsonl"
-OUT_PATH.parent.mkdir(exist_ok=True)
+OUT = ROOT / "data" / "dataset.jsonl"
+OUT.parent.mkdir(exist_ok=True)
 
+# ------------------------------------------------------------------------- #
+def load_peaks(chip_id):
+    """читаем narrowPeak, строим IntervalTree расширенных диапазонов"""
+    npk = ROOT / f"peaks/{chip_id}/{chip_id}_peaks.narrowPeak"
+    tree = defaultdict(IntervalTree)
+    with open(npk) as f:
+        for line in f:
+            chrom, start, end, *_ = line.split()[:3]
+            tree[chrom].add(Interval(int(start)-BUFF, int(end)+BUFF))
+    return tree
 
-# ---------- utils --------------------------------------------------------- #
-def intervals_from_bw(bw: pyBigWig.pyBigWig, chrom: str):
-    """список (start,end) где FE>THRESH"""
-    vals = bw.values(chrom, 0, bw.chroms()[chrom], numpy=False)
-    starts, ends, in_peak = [], [], False
-    for i, v in enumerate(vals):
-        v = v or 0.0
-        if v > THRESH and not in_peak:
-            in_peak, s = True, i
-        elif v <= THRESH and in_peak:
-            in_peak = False
-            starts.append(s); ends.append(i)
-    if in_peak:
-        starts.append(s); ends.append(bw.chroms()[chrom]-1)
-    return zip(starts, ends)
+def chrom_sizes(bw_path):
+    bw = pyBigWig.open(str(bw_path))
+    sizes = bw.chroms(); bw.close()
+    return sizes
 
+# ---------- 1-й проход: считаем total ----------------------------------- #
+total_pos = 0
+for _, row in PAIRS.iterrows():
+    summits = ROOT / f"peaks/{row.chip_id}/{row.chip_id}_summits.bed"
+    total_pos += sum(1 for _ in open(summits))
+total = total_pos * (1 + NEG_RATIO)
+print(f"Окон будет записано: {total}  (pos={total_pos}, neg={total_pos*NEG_RATIO})")
 
-def count_windows(pairs_df):
-    """быстрый подсчёт общего числа окон"""
-    total = 0
-    for _, row in pairs_df.iterrows():
-        fe_bw = pyBigWig.open(str(ROOT / f"bw/{row.chip_id}_FE.bw"))
-        atac  = pyBigWig.open(str(ROOT / f"bw/{row.atac_id}_ATAC.bw"))
-        for chrom in (set(fe_bw.chroms()) & set(atac.chroms())):
-            for s, e in intervals_from_bw(fe_bw, chrom):
-                center = (s + e)//2 - WIN//2
-                if 0 <= center < fe_bw.chroms()[chrom] - WIN:
-                    total += 1
-        fe_bw.close(); atac.close()
-    return total
-
-
-# ---------- main ---------------------------------------------------------- #
-pairs = pd.read_csv(PAIRS_TSV, sep="\t")
-TOTAL = count_windows(pairs)
-print(f"Окон будет записано: {TOTAL}")
-
-OUT_PATH.write_text("")
-with OUT_PATH.open("a") as fout, tqdm(total=TOTAL, unit="windows") as pbar:
-    for _, row in pairs.iterrows():
+# ---------- 2-й проход: записываем jsonl с прогресс-баром --------------- #
+OUT.write_text("")
+with OUT.open("a") as fout, tqdm(total=total, unit="windows") as pbar:
+    for _, row in PAIRS.iterrows():
         atac_bw = ROOT / f"bw/{row.atac_id}_ATAC.bw"
         fe_bw   = ROOT / f"bw/{row.chip_id}_FE.bw"
-        atac = pyBigWig.open(str(atac_bw))
-        fe   = pyBigWig.open(str(fe_bw))
+        fasta   = ROOT / "hg38.fa"
 
-        for chrom in (set(atac.chroms()) & set(fe.chroms())):
-            for s, e in intervals_from_bw(fe, chrom):
-                center = (s + e)//2 - WIN//2
-                if center < 0 or center + WIN >= fe.chroms()[chrom]:
-                    continue
-                rec = dict(
-                    cell    = int(row.cell_id),
-                    chrom   = chrom,
-                    start   = center,
-                    window  = WIN,
-                    dna_fa  = str(ROOT / "hg38.fa"),
-                    atac_bw = str(atac_bw),
-                    fe_bw   = str(fe_bw),
-                )
-                fout.write(json.dumps(rec) + "\n")
-                pbar.update(1)
+        # --- Positive ---
+        summits = ROOT / f"peaks/{row.chip_id}/{row.chip_id}_summits.bed"
+        pos_list = []
+        with open(summits) as f:
+            for line in f:
+                chrom, pos_str, _ = line.split()[:3]
+                summit = int(pos_str)
+                start  = summit - WIN//2
+                pos_list.append((chrom, start))
 
-        atac.close(); fe.close()
+        # --- Negative ---
+        tree = load_peaks(row.chip_id)
+        chrom_len = chrom_sizes(atac_bw)
+        neg_list = []
+        rng = random.Random(42 + int(row.cell_id))
+        while len(neg_list) < len(pos_list) * NEG_RATIO:
+            chrom = rng.choice(list(chrom_len))
+            max_start = chrom_len[chrom] - WIN
+            if max_start <= 0: continue
+            s = rng.randint(0, max_start)
+            if not tree[chrom].overlaps(s, s+WIN):
+                neg_list.append((chrom, s))
 
-print(f"✓ dataset.jsonl готов: {OUT_PATH}")
+        # --- запись ---
+        for chrom, start in pos_list + neg_list:
+            rec = dict(
+                cell   = int(row.cell_id),
+                chrom  = chrom,
+                start  = start,
+                window = WIN,
+                dna_fa = str(fasta),
+                atac_bw= str(atac_bw),
+                fe_bw  = str(fe_bw),
+                label  = 1 if (chrom,start) in pos_list else 0   # meta-флаг
+            )
+            fout.write(json.dumps(rec) + "\n")
+            pbar.update(1)
+
+print(f"✓ dataset.jsonl создан: {OUT}")
