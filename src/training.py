@@ -54,15 +54,16 @@ def fit(cfg_path: str):
 
     best_val = 0.0
     for epoch in range(1, cfg["trainer"]["epochs"] + 1):
-        train_scores = _run_epoch(model, loaders[0], optim,  loss_fn,
-                                  metrics, cfg, epoch, "train", tb)
         val_scores   = _run_epoch(model, loaders[1], None,   loss_fn,
                                   metrics, cfg, epoch, "val",   tb)
+        train_scores = _run_epoch(model, loaders[0], optim,  loss_fn,
+                                  metrics, cfg, epoch, "train", tb)
+
 
         history["epoch"].append(epoch)
         for k, v in train_scores.items():
-            history["train"][k].append(v)
             history["val"][k].append(val_scores[k])
+            history["train"][k].append(v)
 
         # — сохраняем лучшую по AUPRC —
         if val_scores.get("auprc", 0.0) > best_val:
