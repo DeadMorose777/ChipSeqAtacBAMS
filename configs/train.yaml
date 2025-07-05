@@ -10,7 +10,7 @@ dataset:
   stratify_by: cell           # чтобы все клетки были во всех сплитах
 
 loader:
-  batch_size: 8               # смело увеличивайте: RTX 4090 тянет B~16-32
+  batch_size: 8
   num_workers: 4
 
 optim:
@@ -21,8 +21,9 @@ optim:
 trainer:
   epochs: 10
 
-model_cfg: configs/cnn.yaml   # cnn или transformer.yaml
+model_cfg: configs/transformer.yaml  # cnn.yaml или transformer.yaml atac_linear.yaml
 metrics: [auprc, auroc, mcc, bacc]
 device: cuda
 
-save_dir: runs/cnn_run1
+#save_dir: runs/atac_linear
+save_dir: runs/transf_run1
