@@ -1,62 +1,117 @@
 #!/usr/bin/env python3
 """
-Скользящее окно → BigWig с предсказанным ChIP-FE/логитами.
-Работает с новой 5-канальной архитектурой: seq-строка + ATAC-вектор(L).
+predict.py
+==========
+
+Читает модель (CNN или наш Transformer-scratch) и делает BigWig, в
+котором на КАЖДОМ нуклеотиде записана усреднённая вероятность пика по
+всем перекрывающимся окнам из jsonl.
+
+Запуск (пример):
+python predict.py \
+    --model_dir runs/transf_run1 \
+    --fasta     hg38.fa \
+    --atac      bw/AEXP001289_ATAC.bw \
+    --jsonl     data/dataset.jsonl \
+    --outbw     bw/EXP057893_pred.bw \
+    --device    cuda
 """
-import argparse, pyBigWig, pyfaidx, torch, yaml, numpy as np
+import argparse, json, yaml
 from pathlib import Path
+import numpy as np, torch, pyBigWig, pyfaidx
+from tqdm import tqdm
 from src.registry import get_model_cls
 
-# ------------------------- CLI ------------------------------------------ #
+# ---------------- CLI ----------------
 ap = argparse.ArgumentParser()
 ap.add_argument("--model_dir", required=True)
 ap.add_argument("--fasta",     required=True)
 ap.add_argument("--atac",      required=True)
+ap.add_argument("--jsonl",     required=True)
 ap.add_argument("--outbw",     required=True)
-ap.add_argument("--window", type=int, default=1000)
-ap.add_argument("--step",   type=int, default=50)
-ap.add_argument("--device", default="cuda")
+ap.add_argument("--device",    default="cuda")
 args = ap.parse_args()
 
-# ------------------------- load model ----------------------------------- #
-run_cfg   = yaml.safe_load(open(Path(args.model_dir) / "run_config.json"))
+# ---------------- model --------------
+run_cfg   = yaml.safe_load(open(Path(args.model_dir)/"run_config.json"))
 model_cfg = yaml.safe_load(open(run_cfg["model_cfg"]))
 ModelCls  = get_model_cls(Path(run_cfg["model_cfg"]).stem)
 model     = ModelCls(model_cfg).to(args.device)
-model.load_state_dict(torch.load(Path(args.model_dir) / "best.pt",
+model.load_state_dict(torch.load(Path(args.model_dir)/"best.pt",
                                  map_location=args.device))
 model.eval()
 
-# ------------------------- genome I/O ----------------------------------- #
-fa        = pyfaidx.Fasta(args.fasta)
-bw_atac   = pyBigWig.open(args.atac)
-bw_pred   = pyBigWig.open(args.outbw, "w")
-chroms    = {c: len(fa[c]) for c in fa.keys()}
-bw_pred.addHeader(list(chroms.items()))
+# ---------------- genome I/O ---------
+fa   = pyfaidx.Fasta(args.fasta)
+bw_a = pyBigWig.open(args.atac)
+chrom_len = {c: len(fa[c]) for c in fa.keys()}
 
-def atac_vector(chrom, s, e):
-    vec = bw_atac.values(chrom, s, e)
-    return np.nan_to_num(vec, nan=0.0).astype("float32")           # (L,)
+# подготовим аккумуляторы
+sum_dict  = {c: np.zeros(l, dtype=np.float32)  for c,l in chrom_len.items()}
+cnt_dict  = {c: np.zeros(l, dtype=np.uint16)   for c,l in chrom_len.items()}
+
+def atac_vec(ch, s, e):
+    v = bw_a.values(ch, s, e)
+    return np.nan_to_num(v, nan=0.0).astype("float32")
 
 @torch.no_grad()
-def score(chrom, s, e):
-    seq  = fa[chrom][s:e].seq.upper()
-    atac = torch.tensor(atac_vector(chrom, s, e))[None, :]         # (1,L)
-    rec  = {"seq": seq, "atac": atac}
+def window_logits(seq: str, atac_np: np.ndarray):
+    atac = torch.tensor(atac_np)[None,:]                   # (1,L)
+    rec  = {"seq": seq, "atac": atac, "label": torch.zeros(len(seq))}
     batch = model.collate_fn([rec])
     for k,v in batch.items():
         if isinstance(v, torch.Tensor):
             batch[k] = v.to(args.device)
-    y = model(batch).sigmoid().squeeze().cpu().item()              # prob ∈(0,1)
-    return y
+    return model(batch).sigmoid().squeeze(0).cpu().numpy() # (L,)
 
-# ------------------------- sliding window ------------------------------- #
-for chrom, length in chroms.items():
-    starts, ends, vals = [], [], []
-    for s in range(0, length - args.window, args.step):
-        y = score(chrom, s, s + args.window)
-        starts.append(s); ends.append(s + args.window); vals.append(y)
-    bw_pred.addEntries([chrom]*len(starts), starts, ends=ends, values=vals)
+# ---------------- main accumulate ----
+total_win = sum(1 for _ in open(args.jsonl))
+with open(args.jsonl) as f, tqdm(total=total_win, unit="win") as pbar:
+    for line in f:
+        rec   = json.loads(line)
+        chrom = rec["chrom"]
+        start = int(rec["start"])
+        L     = int(rec.get("window", 1000))
+        end   = start + L
+        if chrom not in chrom_len or end > chrom_len[chrom]:
+            pbar.update(1); continue
 
-bw_pred.close(); bw_atac.close(); fa.close()
-print("✓ BigWig создан:", args.outbw)
+        seq  = fa[chrom][start:end].seq.upper()
+        atac = atac_vec(chrom, start, end)
+        log  = window_logits(seq, atac)
+
+        sum_dict[chrom][start:end] += log
+        cnt_dict[chrom][start:end] += 1
+        pbar.update(1)
+
+# ---------------- write BigWig -------    
+bw_out = pyBigWig.open(args.outbw, "w")
+bw_out.addHeader(list(chrom_len.items()))
+
+for chrom, length in chrom_len.items():
+    cnt = cnt_dict[chrom]
+    mask = cnt > 0
+    if not mask.any():
+        continue
+    prob = np.zeros_like(sum_dict[chrom])
+    prob[mask] = sum_dict[chrom][mask] / cnt[mask]
+
+    # пишем блоками непрерывных участков, где mask == True
+    i = 0
+    while i < length:
+        if not mask[i]:
+            i += 1; continue
+        j = i
+        while j < length and mask[j]:
+            j += 1
+        # i..j contiguous
+        bw_out.addEntries(
+            [chrom]* (j - i),
+            list(range(i, j)),
+            ends   = list(range(i+1, j+1)),
+            values = prob[i:j].tolist()
+        )
+        i = j
+
+bw_out.close(); bw_a.close(); fa.close()
+print("✓ BigWig готов:", args.outbw)
