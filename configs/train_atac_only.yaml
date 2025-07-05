@@ -1,0 +1,29 @@
+random_seed: 42
+
+dataset:
+  path: data/dataset.jsonl    # будет создан обновлённым 02_make_windows.py
+  window: 1000                # длина контекста L
+  fasta:  hg38.fa
+  fe_thresh: 1.0              # > FE_thresh → «в пикe»
+  train_frac: 0.7
+  val_frac: 0.15
+  stratify_by: cell           # чтобы все клетки были во всех сплитах
+
+loader:
+  batch_size: 8
+  num_workers: 4
+
+optim:
+  name: AdamW
+  lr: 3e-4
+  weight_decay: 1e-2
+
+trainer:
+  epochs: 10
+
+model_cfg: configs/atac_only.yaml  # cnn.yaml или transformer.yaml atac_linear.yaml
+metrics: [auprc, auroc, mcc, bacc]
+device: cuda
+
+#save_dir: runs/atac_linear
+save_dir: runs/transf_run_atac_only1

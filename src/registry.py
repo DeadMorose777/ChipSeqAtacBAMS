@@ -8,13 +8,17 @@ from .models.cnn_model import CNNModel
 from .models.transformer_model import TransformerModel
 from .models.logreg_model import LogRegModel
 from .models.atac_linear_model import ATACLinearModel 
+from .models.transformer_dna_only_model  import TransformerDNAOnlyModel
+from .models.transformer_atac_only_model import TransformerATACOnlyModel
 
 _MODEL_REGISTRY = {
     "cnn"        : CNNModel,
     "transformer": TransformerModel,
-    "logreg"     : LogRegModel,
-    "atac_linear": ATACLinearModel,     # <-- зарегистрировали
+    "dna_only"   : TransformerDNAOnlyModel,   # ← новое
+    "atac_only"  : TransformerATACOnlyModel,  # ← новое
+    "atac_linear": ATACLinearModel,
 }
+
 
 def get_model_cls(name: str) -> Type[BaseModel]:
     try:
