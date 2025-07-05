@@ -7,11 +7,13 @@ from .models.base_model import BaseModel
 from .models.cnn_model import CNNModel
 from .models.transformer_model import TransformerModel
 from .models.logreg_model import LogRegModel
+from .models.atac_linear_model import ATACLinearModel 
 
-_MODEL_REGISTRY: Dict[str, Type[BaseModel]] = {
+_MODEL_REGISTRY = {
     "cnn"        : CNNModel,
     "transformer": TransformerModel,
     "logreg"     : LogRegModel,
+    "atac_linear": ATACLinearModel,     # <-- зарегистрировали
 }
 
 def get_model_cls(name: str) -> Type[BaseModel]:
